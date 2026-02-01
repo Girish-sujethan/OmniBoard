@@ -1,0 +1,173 @@
+@startuml 8090PCB_System_Architecture
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+' Define styles for different component types
+<style>
+component {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
+}
+database {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+}
+external {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  FontColor #E65100
+}
+queue {
+  BackgroundColor #E8F5E8
+  BorderColor #388E3C
+  FontColor #1B5E20
+}
+</style>
+
+' Title
+title 8090PCB System Architecture
+
+' Define user actor
+actor User as user
+actor Developer as dev
+
+' Frontend Layer
+package "Frontend Layer" as frontend {
+  [React Web App] as react_app
+  [PcbValidator Component] as pcb_validator
+  [ChatInterface Component] as chat_interface
+  [FileCard Component] as file_card
+}
+
+' Backend Layer
+package "Backend API Layer" as backend {
+  [Express.js Server] as express_server
+  [File Upload Service] as file_upload
+  [MCP Bridge Service] as mcp_bridge
+  [LLM Agent Service] as llm_agent
+  [KiCad Render Service] as kicad_render
+  [PCB Validator Service] as pcb_validation
+}
+
+' MCP Server Layer
+package "MCP Server Layer" as mcp_server {
+  [FastMCP Server] as fastmcp
+  [Project Resources] as project_resources
+  [Analysis Tools] as analysis_tools
+  [DRC Tools] as drc_tools
+  [BOM Tools] as bom_tools
+  [Export Tools] as export_tools
+}
+
+' AI Agent Layer
+package "AI Agent Layer" as ai_agent {
+  [LlamaIndex Agent] as llamaindex
+  [RAG System] as rag_system
+  [Document Indexer] as doc_indexer
+}
+
+' External Systems
+package "External Systems" as external {
+  database "File System" as file_system
+  component "KiCad CLI" as kicad_cli
+  component "Ollama LLM Service" as ollama
+  database "STM32 Documentation" as stm32_docs
+}
+
+' Storage Systems
+package "Storage" as storage {
+  database "Upload Directory" as uploads
+  database "Generated Files" as generated_files
+  queue "Validation Cache" as cache
+}
+
+' User interactions
+user --> react_app : HTTP/HTTPS
+dev --> react_app : Development
+
+' Frontend to Backend connections
+react_app --> express_server : REST API Calls
+pcb_validator --> file_upload : Upload Files
+chat_interface --> llm_agent : Chat Messages
+file_card --> express_server : Download Requests
+
+' Backend Internal Connections
+express_server --> file_upload : Multipart Data
+express_server --> pcb_validation : Validation Requests
+express_server --> mcp_bridge : MCP Calls
+express_server --> llm_agent : LLM Processing
+express_server --> kicad_render : PCB Rendering
+
+' Backend to MCP Server
+mcp_bridge --> fastmcp : MCP Protocol
+pcb_validation --> analysis_tools : PCB Analysis
+pcb_validation --> drc_tools : Design Rule Check
+pcb_validation --> bom_tools : BOM Generation
+pcb_validation --> export_tools : Export Operations
+
+' Backend to AI Agent
+llm_agent --> llamaindex : AI Processing
+llamaindex --> rag_system : RAG Queries
+rag_system --> doc_indexer : Document Search
+
+' External System Connections
+kicad_render --> kicad_cli : CLI Commands
+llamaindex --> ollama : LLM Inference
+doc_indexer --> stm32_docs : Documentation Lookup
+file_upload --> uploads : Store Files
+pcb_validation --> generated_files : Save Results
+llm_agent --> cache : Cache Responses
+
+' MCP Server Resources
+fastmcp --> project_resources : Project Data
+fastmcp --> analysis_tools : Analysis Operations
+fastmcp --> drc_tools : DRC Operations
+fastmcp --> bom_tools : BOM Operations
+fastmcp --> export_tools : Export Functions
+
+' File System Access
+uploads --> file_system : File Storage
+generated_files --> file_system : Result Storage
+cache --> file_system : Cache Storage
+
+' Data Flow Annotations
+note right of express_server
+  Port 3001
+  RESTful API
+  CORS Enabled
+end note
+
+note right of fastmcp
+  Model Context Protocol
+  Python Implementation
+  FastMCP Framework
+end note
+
+note right of llamaindex
+  RAG Powered
+  LlamaIndex Framework
+  Structured Output
+end note
+
+note right of ollama
+  Local LLM Service
+  Models:
+  - gpt-oss:20b
+  - qwen3-embedding:0.6b
+  - qwen3-reranker:0.6b
+end note
+
+' Legend
+legend top right
+  |= Color |= Component Type |
+  |<back:E3F2FD> | Frontend |
+  |<back:F3E5F5> | Storage |
+  |<back:FFF3E0> | External |
+  |<back:E8F5E8> | Cache/Queue |
+end legend
+
+@enduml

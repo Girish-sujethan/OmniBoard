@@ -1,0 +1,326 @@
+@startuml 8090PCB_User_Flow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+' Define styles
+<style>
+actor {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
+}
+usecase {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+}
+note {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  FontColor #E65100
+}
+</style>
+
+title 8090PCB User Flow Diagram
+
+' Define actors
+actor "PCB Designer" as designer
+actor "Firmware Developer" as firmware_dev
+actor "System Administrator" as admin
+
+' Define main use cases
+usecase "Upload KiCad Files" as upload_files
+usecase "Validate PCB Design" as validate_pcb
+usecase "Generate Firmware Plan" as generate_firmware
+usecase "View PCB Render" as view_render
+usecase "Download Results" as download_results
+usecase "Chat with AI Assistant" as chat_ai
+usecase "Manage Files" as manage_files
+usecase "Configure System" as configure_system
+usecase "Monitor System Health" as monitor_health
+
+' Define detailed sub-use cases
+package "File Upload Flow" as upload_flow {
+  usecase "Select Files" as select_files
+  usecase "Drag & Drop Files" as drag_drop
+  usecase "Validate File Types" as validate_types
+  usecase "Show Upload Progress" as show_progress
+  usecase "Confirm Upload" as confirm_upload
+}
+
+package "Validation Flow" as validation_flow {
+  usecase "Parse KiCad Files" as parse_files
+  usecase "Extract Components" as extract_components
+  usecase "Run Design Rule Check" as run_drc
+  usecase "Generate BOM" as generate_bom
+  usecase "Create Validation Report" as create_report
+}
+
+package "AI Analysis Flow" as ai_flow {
+  usecase "Analyze Components" as analyze_components
+  usecase "Query STM32 Documentation" as query_docs
+  usecase "Generate Implementation Phases" as generate_phases
+  usecase "Create Task Breakdown" as create_tasks
+  usecase "Identify Risks" as identify_risks
+}
+
+package "Results Flow" as results_flow {
+  usecase "Display Firmware Plan" as display_plan
+  usecase "Show PRD Summary" as show_prd
+  usecase "Render PCB Visualization" as render_pcb
+  usecase "Provide Download Links" as provide_links
+  usecase "Archive Results" as archive_results
+}
+
+' Actor relationships
+designer --> upload_files
+designer --> validate_pcb
+designer --> view_render
+designer --> download_results
+designer --> chat_ai
+
+firmware_dev --> generate_firmware
+firmware_dev --> download_results
+firmware_dev --> chat_ai
+
+admin --> manage_files
+admin --> configure_system
+admin --> monitor_health
+
+' Main flow relationships
+upload_files --> validate_types
+validate_types --> confirm_upload
+confirm_upload --> validate_pcb
+
+validate_pcb --> parse_files
+parse_files --> extract_components
+extract_components --> run_drc
+run_drc --> generate_bom
+generate_bom --> create_report
+
+validate_pcb --> generate_firmware
+generate_firmware --> analyze_components
+analyze_components --> query_docs
+query_docs --> generate_phases
+generate_phases --> create_tasks
+create_tasks --> identify_risks
+
+validate_pcb --> view_render
+view_render --> render_pcb
+
+validate_pcb --> download_results
+download_results --> display_plan
+download_results --> show_prd
+download_results --> provide_links
+provide_links --> archive_results
+
+' Sub-flow relationships
+upload_files --> select_files
+upload_files --> drag_drop
+select_files --> show_progress
+drag_drop --> show_progress
+show_progress --> confirm_upload
+
+validation_flow --> parse_files
+validation_flow --> extract_components
+validation_flow --> run_drc
+validation_flow --> generate_bom
+validation_flow --> create_report
+
+ai_flow --> analyze_components
+ai_flow --> query_docs
+ai_flow --> generate_phases
+ai_flow --> create_tasks
+ai_flow --> identify_risks
+
+results_flow --> display_plan
+results_flow --> show_prd
+results_flow --> render_pcb
+results_flow --> provide_links
+results_flow --> archive_results
+
+' Chat flow
+usecase "Send Message" as send_message
+usecase "Receive AI Response" as receive_response
+usecase "View Conversation History" as view_history
+usecase "Clear History" as clear_history
+chat_ai --> send_message
+chat_ai --> receive_response
+chat_ai --> view_history
+chat_ai --> clear_history
+
+' File management flow
+usecase "List Uploaded Files" as list_files
+usecase "Delete Old Files" as delete_files
+usecase "View File Metadata" as view_metadata
+manage_files --> list_files
+manage_files --> delete_files
+manage_files --> view_metadata
+
+' System configuration flow
+usecase "Set Ollama Models" as set_models
+usecase "Configure KiCad Path" as set_kicad
+usecase "Adjust File Limits" as set_limits
+usecase "Update API Keys" as update_keys
+configure_system --> set_models
+configure_system --> set_kicad
+configure_system --> set_limits
+configure_system --> update_keys
+
+' System monitoring flow
+usecase "Check Service Status" as check_status
+usecase "View System Logs" as view_logs
+usecase "Monitor Resource Usage" as monitor_resources
+usecase "Receive Alerts" as receive_alerts
+monitor_health --> check_status
+monitor_health --> view_logs
+monitor_health --> monitor_resources
+monitor_health --> receive_alerts
+
+' Include relationships
+upload_files ..> select_files : <<include>>
+upload_files ..> drag_drop : <<include>>
+upload_files ..> validate_types : <<include>>
+upload_files ..> show_progress : <<include>>
+upload_files ..> confirm_upload : <<include>>
+
+validate_pcb ..> parse_files : <<include>>
+validate_pcb ..> extract_components : <<include>>
+validate_pcb ..> run_drc : <<include>>
+validate_pcb ..> generate_bom : <<include>>
+validate_pcb ..> create_report : <<include>>
+
+generate_firmware ..> analyze_components : <<include>>
+generate_firmware ..> query_docs : <<include>>
+generate_firmware ..> generate_phases : <<include>>
+generate_firmware ..> create_tasks : <<include>>
+generate_firmware ..> identify_risks : <<include>>
+
+download_results ..> display_plan : <<include>>
+download_results ..> show_prd : <<include>>
+download_results ..> provide_links : <<include>>
+download_results ..> archive_results : <<include>>
+
+' Extension relationships
+usecase "Handle Validation Errors" as handle_errors
+usecase "Custom AI Prompts" as custom_prompts
+usecase "Batch Upload" as batch_upload
+handle_errors ..> validate_pcb : <<extend>>
+custom_prompts ..> generate_firmware : <<extend>>
+batch_upload ..> upload_files : <<extend>>
+
+' Generalization relationships
+generalization "File Upload Methods" as upload_methods
+select_files --|> upload_methods
+drag_drop --|> upload_methods
+
+generalization "AI Interaction Types" as ai_types
+send_message --|> ai_types
+receive_response --|> ai_types
+
+' Decision points
+decision "File Type Valid?" as file_type_decision
+decision "Validation Passed?" as validation_decision
+decision "AI Analysis Complete?" as ai_decision
+decision "User Satisfied?" as satisfaction_decision
+
+' Flow with decisions
+validate_types --> file_type_decision
+file_type_decision --> confirm_upload : Yes
+file_type_decision --> "Show Error Message" as show_error : No
+
+create_report --> validation_decision
+validation_decision --> generate_firmware : Yes
+validation_decision --> handle_errors : No
+
+identify_risks --> ai_decision
+ai_decision --> view_render : Yes
+ai_decision --> "Retry Analysis" as retry_analysis : No
+
+provide_links --> satisfaction_decision
+satisfaction_decision --> archive_results : Yes
+satisfaction_decision --> "Request Modifications" as request_mods : No
+
+' Error handling flows
+handle_errors --> "Display Error Details" as show_error_details
+handle_errors --> "Suggest Fixes" as suggest_fixes
+show_error_details --> "Allow Re-upload" as allow_reupload
+suggest_fixes --> allow_reupload
+
+retry_analysis --> "Adjust Parameters" as adjust_params
+adjust_params --> analyze_components
+
+request_mods --> "Collect User Feedback" as collect_feedback
+collect_feedback --> generate_firmware
+
+' System boundaries
+rectangle "Web Application" as web_app {
+  upload_files
+  validate_pcb
+  generate_firmware
+  view_render
+  download_results
+  chat_ai
+  manage_files
+}
+
+rectangle "Backend Services" as backend {
+  parse_files
+  extract_components
+  run_drc
+  generate_bom
+  analyze_components
+  query_docs
+  generate_phases
+  create_tasks
+  identify_risks
+  render_pcb
+}
+
+rectangle "External Systems" as external {
+  "KiCad CLI" as kicad_cli
+  "Ollama LLM" as ollama
+  "STM32 Documentation" as stm32_docs
+}
+
+' System interactions
+web_app --> backend : API calls
+backend --> kicad_cli : CLI commands
+backend --> ollama : LLM queries
+backend --> stm32_docs : Documentation lookup
+
+' Notes for key flows
+note top of upload_files
+  User can upload:
+  - .kicad_pro (project file)
+  - .kicad_sch (schematic)
+  - .kicad_pcb (PCB layout)
+  - Netlist files
+end note
+
+note right of generate_firmware
+  AI-powered firmware planning
+  with RAG from STM32 documentation
+  Generates structured implementation plan
+end note
+
+note bottom of download_results
+  Provides multiple output formats:
+  - Firmware plan (Markdown)
+  - PRD summary (Markdown)
+  - PCB render (SVG)
+  - Validation summary (JSON)
+end note
+
+' Legend
+legend top right
+  |= Actor Type |= Description |
+  |<back:E3F2FD> | Primary Users |
+  |= Flow Type |= Description |
+  |<back:F3E5F5> | Main Use Cases |
+  |<back:FFF3E0> | Notes/Decisions |
+end legend
+
+@enduml

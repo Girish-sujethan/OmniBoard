@@ -1,0 +1,410 @@
+@startuml 8090PCB_Component_Architecture
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+' Define styles
+<style>
+package {
+  BackgroundColor #F5F5F5
+  BorderColor #666666
+  FontColor #333333
+}
+class {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
+}
+interface {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  FontColor #E65100
+}
+enum {
+  BackgroundColor #E8F5E8
+  BorderColor #388E3C
+  FontColor #1B5E20
+}
+</style>
+
+title 8090PCB Component Architecture
+
+' Frontend Components
+package "Frontend (React)" as frontend {
+  class App {
+    +main()
+    +setupRouter()
+  }
+  
+  class PcbValidator {
+    +handleFileUpload()
+    +validateFiles()
+    +displayResults()
+    -uploadState
+    -validationResults
+  }
+  
+  class ChatInterface {
+    +sendMessage()
+    +receiveMessage()
+    +displayHistory()
+    -messages
+    -conversationId
+  }
+  
+  class FileCard {
+    +downloadFile()
+    +previewFile()
+    +deleteFile()
+    -fileInfo
+    -downloadUrl
+  }
+  
+  class ApiClient {
+    +validatePcb()
+    +sendMessage()
+    +getFileDownloadUrl()
+    +previewFile()
+    -baseUrl
+    -axiosInstance
+  }
+}
+
+' Backend Components
+package "Backend (Express.js)" as backend {
+  class Server {
+    +start()
+    +setupMiddleware()
+    +setupRoutes()
+    -app
+    -port
+  }
+  
+  class PcbValidatorService {
+    +validateFiles()
+    +processUpload()
+    +generateResults()
+    -validationId
+    -uploadPath
+    -generatedPath
+  }
+  
+  class LlmAgentService {
+    +spawnAgent()
+    +processRequest()
+    +handleResponse()
+    -agentProcess
+    -modelConfig
+  }
+  
+  class McpBridgeService {
+    +connectToServer()
+    +callTool()
+    +getResource()
+    -mcpClient
+    -serverConfig
+  }
+  
+  class KiCadRenderService {
+    +renderPcb()
+    +generateSvg()
+    +validateKiCadFiles()
+    -kicadCliPath
+    -outputFormat
+  }
+  
+  class FileService {
+    +uploadFiles()
+    +downloadFile()
+    +previewFile()
+    +listFiles()
+    -uploadDir
+    -generatedDir
+  }
+}
+
+' MCP Server Components
+package "MCP Server (Python)" as mcp_server {
+  class FastMcpServer {
+    +setup()
+    +registerResources()
+    +registerTools()
+    -lifespanManager
+    -resourceHandlers
+    -toolHandlers
+  }
+  
+  class ProjectResources {
+    +listProjects()
+    +getProjectDetails()
+    +searchProjects()
+    -projectPath
+    -searchIndex
+  }
+  
+  class AnalysisTools {
+    +analyzePcb()
+    +extractComponents()
+    +validateDesign()
+    -analysisEngine
+    -validationRules
+  }
+  
+  class DrcTools {
+    +runDesignRuleCheck()
+    +generateReport()
+    +checkViolations()
+    -drcEngine
+    -ruleSet
+  }
+  
+  class BomTools {
+    +generateBom()
+    +exportBom()
+    +analyzeComponents()
+    -bomGenerator
+    -componentDb
+  }
+  
+  class ExportTools {
+    +exportToFormat()
+    +generateReport()
+    +createArchive()
+    -exportEngine
+    -formatHandlers
+  }
+}
+
+' AI Agent Components
+package "AI Agent (Python/LlamaIndex)" as ai_agent {
+  class LlamaIndexAgent {
+    +initialize()
+    +processQuery()
+    +generateResponse()
+    -queryEngine
+    -retriever
+    -responseSynthesizer
+  }
+  
+  class RagSystem {
+    +indexDocuments()
+    +retrieveDocuments()
+    +rerankResults()
+    -vectorStore
+    -embedModel
+    -reranker
+  }
+  
+  class DocumentIndexer {
+    +loadDocuments()
+    +createIndex()
+    +updateIndex()
+    -documentStore
+    -indexConfig
+  }
+  
+  class PromptManager {
+    +getSystemPrompt()
+    +getTemplate()
+    +formatPrompt()
+    -promptTemplates
+    -templateEngine
+  }
+}
+
+' Utility Components
+package "Utilities" as utils {
+  class FileUtils {
+    +validateFileType()
+    +sanitizeFileName()
+    +createTempDir()
+    -allowedExtensions
+    -maxFileSize
+  }
+  
+  class PathValidator {
+    +validatePath()
+    +checkSecurity()
+    +normalizePath()
+    -allowedPaths
+    -securityRules
+  }
+  
+  class SecureSubprocess {
+    +executeCommand()
+    +validateCommand()
+    +handleOutput()
+    -allowedCommands
+    -timeoutConfig
+  }
+  
+  class ConfigManager {
+    +loadConfig()
+    +getSetting()
+    +validateConfig()
+    -configData
+    -environment
+  }
+}
+
+' Component Relationships
+' Frontend internal
+App --> PcbValidator : renders
+App --> ChatInterface : renders
+PcbValidator --> ApiClient : uses
+ChatInterface --> ApiClient : uses
+FileCard --> ApiClient : uses
+
+' Backend internal
+Server --> PcbValidatorService : routes
+Server --> LlmAgentService : routes
+Server --> McpBridgeService : routes
+Server --> KiCadRenderService : routes
+Server --> FileService : routes
+
+PcbValidatorService --> LlmAgentService : calls
+PcbValidatorService --> KiCadRenderService : calls
+PcbValidatorService --> FileService : uses
+LlmAgentService --> McpBridgeService : optional
+
+' MCP Server internal
+FastMcpServer --> ProjectResources : registers
+FastMcpServer --> AnalysisTools : registers
+FastMcpServer --> DrcTools : registers
+FastMcpServer --> BomTools : registers
+FastMcpServer --> ExportTools : registers
+
+' AI Agent internal
+LlamaIndexAgent --> RagSystem : uses
+LlamaIndexAgent --> PromptManager : uses
+RagSystem --> DocumentIndexer : uses
+
+' Cross-layer relationships
+ApiClient --> Server : HTTP/REST
+LlmAgentService --> LlamaIndexAgent : subprocess
+McpBridgeService --> FastMcpServer : MCP protocol
+KiCadRenderService --> FileUtils : uses
+FileService --> FileUtils : uses
+FileService --> PathValidator : uses
+SecureSubprocess --> PathValidator : uses
+
+' Configuration dependencies
+Server --> ConfigManager : loads
+FastMcpServer --> ConfigManager : loads
+LlamaIndexAgent --> ConfigManager : loads
+
+' Data Models
+package "Data Models" as models {
+  class ValidationRequest {
+    +files: File[]
+    +validationId: string
+    +timestamp: Date
+  }
+  
+  class ValidationResponse {
+    +validationId: string
+    +firmwarePlan: string
+    +prdSummary: string
+    +generatedFiles: string[]
+    +status: string
+  }
+  
+  class ChatMessage {
+    +id: string
+    +content: string
+    +role: string
+    +timestamp: Date
+  }
+  
+  class FileInfo {
+    +name: string
+    +size: number
+    +type: string
+    +url: string
+  }
+}
+
+' Model usage
+PcbValidatorService --> ValidationRequest : creates
+PcbValidatorService --> ValidationResponse : returns
+ChatInterface --> ChatMessage : uses
+FileService --> FileInfo : creates
+
+' Interface definitions
+interface IMcpTool {
+  +execute(params: Map)
+  +validate(params: Map)
+  +getDescription(): string
+}
+
+interface IResource {
+  +getUri(): string
+  +getContent(): string
+  +getMetadata(): Map
+}
+
+interface IValidationService {
+  +validate(request: ValidationRequest): Promise<ValidationResponse>
+  +getStatus(validationId: string): string
+}
+
+' Tool implementations
+AnalysisTools ..|> IMcpTool
+DrcTools ..|> IMcpTool
+BomTools ..|> IMcpTool
+ExportTools ..|> IMcpTool
+
+' Resource implementations
+ProjectResources ..|> IResource
+
+' Service implementations
+PcbValidatorService ..|> IValidationService
+
+' Enums for configuration
+enum ValidationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum FileType {
+  KICAD_PRO
+  KICAD_SCH
+  KICAD_PCB
+  NETLIST
+  OTHER
+}
+
+enum LlmMode {
+  CHAT
+  FIRMWARE
+  ANALYSIS
+}
+
+' Enum usage
+ValidationResponse --> ValidationStatus : status
+FileInfo --> FileType : type
+LlamaIndexAgent --> LlmMode : mode
+
+' Notes for key components
+note right of PcbValidatorService
+  Main orchestration service
+  Coordinates file processing
+  Manages validation pipeline
+end note
+
+note right of LlamaIndexAgent
+  AI-powered analysis
+  RAG with STM32 docs
+  Structured output generation
+end note
+
+note right of FastMcpServer
+  Model Context Protocol
+  Standardized tool interface
+  Resource management
+end note
+
+@enduml

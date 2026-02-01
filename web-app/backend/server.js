@@ -7,6 +7,8 @@ import fs from 'fs';
 import chatRoutes from './routes/chat.js';
 import fileRoutes from './routes/files.js';
 import pcbRoutes from './routes/pcb.js';
+import projectsRoutes from './routes/projects.js';
+import reportsRoutes from './routes/reports.js';
 
 dotenv.config();
 
@@ -34,10 +36,25 @@ dirs.forEach(dir => {
 app.use('/api/chat', chatRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/pcb', pcbRoutes);
+app.use('/api/projects', projectsRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    services: {
+      backend: true,
+      mcp: process.env.MCP_ENABLED !== 'false'
+    },
+    environment: {
+      nodeEnv: process.env.NODE_ENV,
+      ollamaModel: process.env.OLLAMA_LLM_MODEL || 'not set',
+      mcpEnabled: process.env.MCP_ENABLED !== 'false'
+    }
+  };
+  res.json(health);
 });
 
 // Error handling

@@ -7,10 +7,12 @@ import {
   Image,
   Loader2,
   X,
+  Activity,
 } from 'lucide-react';
 import api from '../services/api';
 import FileCard from './FileCard';
 import BackgroundParticles from './BackgroundParticles';
+import McpAnalysisPanel from './McpAnalysisPanel';
 
 const ACCEPTED_EXTENSIONS = [
   '.kicad_pro',
@@ -26,7 +28,9 @@ const PcbValidator = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
+  const [mcpAnalysis, setMcpAnalysis] = useState(null);
   const [error, setError] = useState(null);
   const shouldReduceMotion = useReducedMotion();
 
@@ -109,11 +113,12 @@ const PcbValidator = () => {
 
   const handleValidate = async () => {
     if (selectedFiles.length === 0 || isSubmitting) return;
-
+    
     setIsSubmitting(true);
     setError(null);
     setResult(null);
-
+    setMcpAnalysis(null);
+    
     try {
       const response = await api.validatePcb(selectedFiles);
       if (!response.success) {
@@ -124,6 +129,26 @@ const PcbValidator = () => {
       setError(err.message || 'Failed to generate plan');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleMcpAnalyze = async () => {
+    if (selectedFiles.length === 0 || isAnalyzing) return;
+    
+    setIsAnalyzing(true);
+    setError(null);
+    setMcpAnalysis(null);
+    
+    try {
+      const response = await api.analyzePcb(selectedFiles, true);
+      if (!response.success) {
+        throw new Error(response.error || 'MCP analysis failed');
+      }
+      setMcpAnalysis(response.mcpAnalysis);
+    } catch (err) {
+      setError(err.message || 'Failed to analyze with MCP');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -175,6 +200,24 @@ const PcbValidator = () => {
                       </span>
                     ) : (
                       'Generate Firmware Plan'
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMcpAnalyze}
+                    disabled={selectedFiles.length === 0 || isAnalyzing}
+                    className="flex items-center gap-2 px-4 py-3 bg-purple-900 hover:bg-purple-800 disabled:bg-purple-950 disabled:cursor-not-allowed text-white rounded-none transition-colors"
+                  >
+                    {isAnalyzing ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Analyzing...
+                      </span>
+                    ) : (
+                      <>
+                        <Activity className="w-4 h-4" />
+                        <span>Analyze with MCP</span>
+                      </>
                     )}
                   </button>
                 </div>
@@ -301,6 +344,12 @@ const PcbValidator = () => {
                         ))}
                     </motion.div>
                   </motion.section>
+
+                  {mcpAnalysis && (
+                    <motion.section variants={fadeUpVariants}>
+                      <McpAnalysisPanel analysisData={mcpAnalysis} />
+                    </motion.section>
+                  )}
 
                   <motion.section className="glass-card" variants={fadeUpVariants}>
                     <div className="flex items-center gap-2 text-purple-100">

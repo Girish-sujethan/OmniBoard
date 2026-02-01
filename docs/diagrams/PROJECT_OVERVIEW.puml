@@ -1,0 +1,995 @@
+@startuml 8090PCB_Project_Overview
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+' Define consistent styles using skinparam (compatible syntax)
+skinparam component {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
+}
+skinparam database {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+}
+skinparam actor {
+  BackgroundColor #E1F5FE
+  BorderColor #0288D1
+  FontColor #01579B
+}
+
+title 8090PCB - Complete Project Architecture Overview
+
+' User actors
+actor "PCB Designer" as designer
+actor "Firmware Developer" as firmware_dev
+actor "System Administrator" as admin
+
+' Frontend Layer
+package "Frontend Layer" as frontend {
+  [React Web App] as react_app
+  [PcbValidator Component] as pcb_validator
+  [ChatInterface Component] as chat_interface
+  [FileCard Component] as file_card
+  [API Client Service] as api_client
+}
+
+' Backend API Layer
+package "Backend API Layer" as backend {
+  [Express.js Server] as express_server
+  [File Upload Service] as file_upload
+  [MCP Bridge Service] as mcp_bridge
+  [LLM Agent Service] as llm_agent
+  [KiCad Render Service] as kicad_render
+  [PCB Validator Service] as pcb_validation
+}
+
+' MCP Server Layer
+package "MCP Server Layer" as mcp_server {
+  [FastMCP Server] as fastmcp
+  [Project Resources] as project_resources
+  [Analysis Tools] as analysis_tools
+  [DRC Tools] as drc_tools
+  [BOM Tools] as bom_tools
+  [Export Tools] as export_tools
+}
+
+' AI Agent Layer
+package "AI Agent Layer" as ai_agent {
+  [LlamaIndex Agent] as llamaindex
+  [RAG System] as rag_system
+  [Document Indexer] as doc_indexer
+  [Prompt Manager] as prompt_mgr
+}
+
+' External Systems
+package "External Systems" as external {
+  database "File System" as file_system
+  component "KiCad CLI" as kicad_cli
+  component "Ollama LLM Service" as ollama
+  database "STM32 Documentation" as stm32_docs
+}
+
+' Storage Systems
+package "Storage" as storage {
+  database "Upload Directory" as uploads
+  database "Generated Files" as generated_files
+  database "Validation Cache" as cache
+}
+
+' User interactions
+designer --> react_app
+firmware_dev --> react_app
+admin --> react_app
+
+' Frontend internal connections
+react_app --> pcb_validator
+react_app --> chat_interface
+react_app --> file_card
+pcb_validator --> api_client
+chat_interface --> api_client
+file_card --> api_client
+
+' Frontend to backend
+api_client --> express_server
+express_server --> file_upload
+express_server --> pcb_validation
+express_server --> mcp_bridge
+express_server --> llm_agent
+express_server --> kicad_render
+
+' Backend internal
+pcb_validation --> llm_agent
+pcb_validation --> kicad_render
+pcb_validation --> file_upload
+llm_agent --> mcp_bridge
+
+' Backend to MCP server
+mcp_bridge --> fastmcp
+pcb_validation --> analysis_tools
+pcb_validation --> drc_tools
+pcb_validation --> bom_tools
+pcb_validation --> export_tools
+
+' MCP server internal
+fastmcp --> project_resources
+fastmcp --> analysis_tools
+fastmcp --> drc_tools
+fastmcp --> bom_tools
+fastmcp --> export_tools
+
+' Backend to AI agent
+llm_agent --> llamaindex
+llamaindex --> rag_system
+rag_system --> doc_indexer
+llamaindex --> prompt_mgr
+
+' External system connections
+kicad_render --> kicad_cli
+llamaindex --> ollama
+doc_indexer --> stm32_docs
+file_upload --> uploads
+pcb_validation --> generated_files
+llm_agent --> cache
+
+' File system access
+uploads --> file_system
+generated_files --> file_system
+cache --> file_system
+
+' Key annotations
+note right of express_server
+  Port 3001
+  RESTful API
+  CORS Enabled
+  File Upload: 50MB max
+end note
+
+note right of fastmcp
+  Model Context Protocol
+  Python Implementation
+  FastMCP Framework
+  KiCad Integration
+end note
+
+note right of llamaindex
+  RAG Powered
+  LlamaIndex Framework
+  STM32 Documentation
+  Structured Output
+end note
+
+note right of ollama
+  Local LLM Service
+  Models:
+  - gpt-oss:20b (main)
+  - qwen3-embedding:0.6b
+  - qwen3-reranker:0.6b
+end note
+
+@enduml
+
+@startuml 8090PCB_User_Flow_Sequence
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB User Flow Sequence Diagram
+
+participant "User" as user
+participant "React Frontend" as frontend
+participant "Express Server" as server
+participant "File Service" as file_service
+participant "PCB Validator" as validator
+participant "LLM Agent Service" as llm_service
+participant "LlamaIndex Agent" as ai_agent
+participant "MCP Bridge" as mcp_bridge
+participant "FastMCP Server" as mcp_server
+participant "KiCad CLI" as kicad_cli
+participant "Ollama LLM" as ollama
+database "File System" as filesystem
+database "STM32 Docs" as stm32_docs
+
+autonumber 1
+
+== File Upload Phase ==
+
+user -> frontend: Drag & Drop KiCad files
+frontend -> frontend: Validate file types
+frontend -> frontend: Create validation ID
+frontend -> server: POST /api/pcb/validate
+
+activate server
+
+server -> file_service: handleFileUpload()
+activate file_service
+
+file_service -> filesystem: Create upload directory
+file_service -> filesystem: Store uploaded files
+file_service --> server: Return file paths
+
+deactivate file_service
+
+server -> validator: validateFiles(validationId, filePaths)
+activate validator
+
+== File Parsing Phase ==
+
+validator -> validator: Parse KiCad files
+validator -> validator: Extract component list
+validator -> validator: Identify microcontrollers
+
+== MCP Analysis Phase ==
+
+validator -> mcp_bridge: connectToServer()
+activate mcp_bridge
+
+mcp_bridge -> mcp_server: MCP handshake
+activate mcp_server
+
+mcp_bridge --> validator: Return MCP client
+
+deactivate mcp_server
+
+validator -> mcp_bridge: callTool("analyze_pcb", {components})
+activate mcp_bridge
+
+mcp_bridge -> mcp_server: Execute analysis tool
+activate mcp_server
+
+mcp_server -> mcp_server: Extract component information
+mcp_server -> mcp_server: Analyze circuit topology
+mcp_server --> mcp_bridge: Return analysis results
+
+deactivate mcp_server
+
+mcp_bridge --> validator: Return component analysis
+
+deactivate mcp_bridge
+
+== Design Rule Check Phase ==
+
+validator -> mcp_bridge: callTool("run_drc", {pcb_file})
+activate mcp_bridge
+
+mcp_bridge -> mcp_server: Execute DRC tool
+activate mcp_server
+
+mcp_server -> kicad_cli: kicad-cli drc [pcb_file]
+activate kicad_cli
+
+kicad_cli --> mcp_server: DRC report
+
+deactivate kicad_cli
+
+mcp_server --> mcp_bridge: Return DRC results
+
+deactivate mcp_server
+
+mcp_bridge --> validator: Return DRC report
+
+deactivate mcp_bridge
+
+== AI Analysis Phase ==
+
+validator -> llm_service: spawnAgent('firmware_mode')
+activate llm_service
+
+llm_service -> ai_agent: Start Python subprocess
+activate ai_agent
+
+ai_agent -> ai_agent: Initialize LlamaIndex
+ai_agent --> llm_service: Agent ready
+
+deactivate ai_agent
+
+llm_service --> validator: Return agent handle
+
+deactivate llm_service
+
+validator -> llm_service: processRequest(analysis_data)
+activate llm_service
+
+llm_service -> ai_agent: Send analysis request
+activate ai_agent
+
+ai_agent -> stm32_docs: Query relevant documentation
+activate stm32_docs
+
+stm32_docs --> ai_agent: Return technical documents
+
+deactivate stm32_docs
+
+ai_agent -> ollama: Generate embeddings
+activate ollama
+
+ollama --> ai_agent: Return vector embeddings
+
+deactivate ollama
+
+ai_agent -> ai_agent: Perform RAG retrieval
+ai_agent -> ollama: Rerank documents
+activate ollama
+
+ollama --> ai_agent: Return ranked results
+
+deactivate ollama
+
+ai_agent -> ollama: Generate firmware plan
+activate ollama
+
+ollama --> ai_agent: Return structured response
+
+deactivate ollama
+
+ai_agent --> llm_service: Return AI analysis results
+
+deactivate ai_agent
+
+llm_service --> validator: Return firmware plan and PRD
+
+deactivate llm_service
+
+== PCB Rendering Phase ==
+
+validator -> kicad_cli: kicad-cli export --format svg
+activate kicad_cli
+
+kicad_cli -> filesystem: Read PCB file
+kicad_cli -> filesystem: Write SVG render
+kicad_cli --> validator: Return SVG file path
+
+deactivate kicad_cli
+
+== Results Generation Phase ==
+
+validator -> filesystem: Save firmware plan (Markdown)
+validator -> filesystem: Save PRD summary (Markdown)
+validator -> filesystem: Save validation summary (JSON)
+validator -> filesystem: Save PCB render (SVG)
+
+validator --> server: Return validation results
+
+deactivate validator
+
+== Response Phase ==
+
+server -> server: Format response JSON
+server --> frontend: POST response (200 OK)
+
+deactivate server
+
+== Frontend Display Phase ==
+
+frontend -> frontend: Parse response data
+frontend -> frontend: Update UI with results
+frontend -> user: Show validation results
+
+@enduml
+
+@startuml 8090PCB_Data_Flow_Activity
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB Data Processing Activity Diagram
+
+start
+
+:User uploads KiCad files;
+if (File validation successful?) then (yes)
+  :Parse KiCad project file;
+  :Extract schematic data;
+  :Parse PCB layout;
+  :Extract component list;
+  
+  fork
+    :MCP Analysis;
+    :Extract component information;
+    :Analyze circuit topology;
+    :Generate BOM;
+  fork again
+    :Design Rule Check;
+    :Run KiCad CLI DRC;
+    :Generate DRC report;
+  fork again
+    :PCB Rendering;
+    :Generate SVG visualization;
+  end fork
+  
+  :AI Analysis;
+  :Query STM32 documentation;
+  :Generate embeddings;
+  :Perform RAG retrieval;
+  :Generate firmware plan;
+  :Create PRD summary;
+  
+  :Generate results;
+  :Save firmware plan (MD);
+  :Save PRD summary (MD);
+  :Save validation summary (JSON);
+  :Save PCB render (SVG);
+  
+  :Return results to user;
+  
+  stop
+else (no)
+  :Display validation error;
+  :Suggest file corrections;
+  stop
+endif
+
+@enduml
+
+@startuml 8090PCB_Component_Relationships
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB Component Class Relationships
+
+class ReactApp {
+  +main()
+  +setupRouter()
+  +render()
+}
+
+class PcbValidator {
+  +handleFileUpload()
+  +validateFiles()
+  +displayResults()
+  -uploadState
+  -validationResults
+}
+
+class ExpressServer {
+  +start()
+  +setupMiddleware()
+  +setupRoutes()
+  -app
+  -port
+}
+
+class PcbValidatorService {
+  +validateFiles()
+  +processUpload()
+  +generateResults()
+  -validationId
+  -uploadPath
+}
+
+class LlmAgentService {
+  +spawnAgent()
+  +processRequest()
+  +handleResponse()
+  -agentProcess
+  -modelConfig
+}
+
+class FastMcpServer {
+  +setup()
+  +registerResources()
+  +registerTools()
+  -lifespanManager
+}
+
+class LlamaIndexAgent {
+  +initialize()
+  +processQuery()
+  +generateResponse()
+  -queryEngine
+  -retriever
+}
+
+interface IMcpTool {
+  +execute(params: Map)
+  +validate(params: Map)
+  +getDescription()
+}
+
+interface IValidationService {
+  +validate(request: ValidationRequest)
+  +getStatus(validationId: string)
+}
+
+class AnalysisTools {
+  +analyzePcb()
+  +extractComponents()
+  +validateDesign()
+}
+
+class DrcTools {
+  +runDesignRuleCheck()
+  +generateReport()
+  +checkViolations()
+}
+
+' Relationships
+ReactApp --> PcbValidator : renders
+PcbValidator --> ExpressServer : API calls
+ExpressServer --> PcbValidatorService : routes
+PcbValidatorService --> LlmAgentService : calls
+LlmAgentService --> FastMcpServer : MCP protocol
+FastMcpServer --> LlamaIndexAgent : AI processing
+
+' Interface implementations
+AnalysisTools ..|> IMcpTool
+DrcTools ..|> IMcpTool
+PcbValidatorService ..|> IValidationService
+
+' Inheritance
+class ComponentValidator {
+  +validateFile()
+  +checkIntegrity()
+}
+class FileProcessor {
+  +processFile()
+  +extractData()
+}
+AnalysisTools --|> ComponentValidator
+DrcTools --|> ComponentValidator
+
+@enduml
+
+@startuml 8090PCB_Deployment_Architecture
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB Deployment Architecture
+
+deployment "Production Environment" {
+  
+  node "Web Server" as web_server {
+    component "Nginx" as nginx
+    component "React Frontend" as react_frontend
+  }
+  
+  node "Application Server" as app_server {
+    component "Node.js Runtime" as nodejs
+    component "Express Backend" as express_backend
+  }
+  
+  node "MCP Server" as mcp_host {
+    component "Python Runtime" as python
+    component "FastMCP Server" as fastmcp_deploy
+  }
+  
+  node "AI Services" as ai_host {
+    component "Ollama LLM" as ollama_deploy
+    component "LlamaIndex Agent" as llamaindex_deploy
+  }
+  
+  node "EDA Services" as eda_host {
+    component "KiCad CLI" as kicad_deploy
+  }
+  
+  node "Storage" as storage_host {
+    artifact "File System" as fs_storage
+    artifact "Upload Directory" as upload_storage
+    artifact "Generated Files" as generated_storage
+  }
+  
+  node "Database" as db_host {
+    database "STM32 Documentation" as stm32_db
+    database "Vector Database" as vector_db
+  }
+}
+
+' Network connections
+web_server --> app_server : HTTPS
+app_server --> mcp_host : MCP Protocol
+app_server --> ai_host : HTTP/gRPC
+app_server --> eda_host : CLI calls
+app_server --> storage_host : File I/O
+ai_host --> db_host : Document queries
+
+' User access
+actor "End User" as end_user
+end_user --> web_server : Browser
+
+' Load balancer (if applicable)
+node "Load Balancer" as lb
+lb --> web_server
+
+' Monitoring
+node "Monitoring" as monitoring
+monitoring --> app_server : Metrics
+monitoring --> mcp_host : Health checks
+monitoring --> ai_host : Performance
+
+@enduml
+
+@startuml 8090PCB_Technology_Stack
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB Technology Stack
+
+rectangle "Frontend Stack" as frontend_stack {
+  [React 18] as react
+  [Vite] as vite
+  [Tailwind CSS] as tailwind
+  [Framer Motion] as framer
+  [Axios] as axios
+}
+
+rectangle "Backend Stack" as backend_stack {
+  [Node.js] as nodejs
+  [Express.js] as express
+  [ES6 Modules] as es6
+  [Multer] as multer
+  [MCP SDK] as mcp_sdk
+}
+
+rectangle "MCP Server Stack" as mcp_stack {
+  [Python 3.10+] as python
+  [FastMCP] as fastmcp_lib
+  [pandas] as pandas_lib
+  [pyyaml] as pyyaml_lib
+  [defusedxml] as defusedxml_lib
+}
+
+rectangle "AI/LLM Stack" as ai_stack {
+  [LlamaIndex] as llamaindex_lib
+  [Ollama] as ollama_lib
+  [RAG System] as rag_lib
+  [Embedding Models] as embedding_lib
+}
+
+rectangle "EDA Integration" as eda_stack {
+  [KiCad CLI] as kicad_cli_lib
+  [File Parser] as parser_lib
+  [SVG Export] as svg_lib
+  [DRC Engine] as drc_lib
+}
+
+rectangle "Storage & Cache" as storage_stack {
+  [File System] as fs_lib
+  [Upload Manager] as upload_lib
+  [Validation Cache] as cache_lib
+  [Vector Database] as vector_lib
+}
+
+' Dependencies
+frontend_stack --> backend_stack : API calls
+backend_stack --> mcp_stack : MCP protocol
+backend_stack --> ai_stack : LLM processing
+backend_stack --> eda_stack : EDA operations
+ai_stack --> storage_stack : Document storage
+mcp_stack --> storage_stack : File access
+
+' Version annotations
+note right of react : v18.2+
+note right of nodejs : v18+
+note right of python : v3.10+
+note right of llamaindex_lib : v0.9+
+note right of fastmcp_lib : v2.0+
+
+@enduml
+
+@startuml 8090PCB_API_Endpoints
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB API Endpoints Overview
+
+rectangle "REST API" as api {
+  
+  rectangle "PCB Validation" as pcb_api {
+    [POST /api/pcb/validate] as validate_endpoint
+    note right of validate_endpoint
+      Main validation endpoint
+      Multipart file upload
+      Returns validation results
+    end note
+  }
+  
+  rectangle "File Management" as file_api {
+    [GET /api/files/:filename] as download_endpoint
+    [GET /api/files/preview/:filename] as preview_endpoint
+    [GET /api/files] as list_endpoint
+    
+    note right of download_endpoint
+      File download
+      Stream response
+      Access control
+    end note
+  }
+  
+  rectangle "Chat Interface" as chat_api {
+    [POST /api/chat/message] as chat_endpoint
+    [GET /api/chat/history/:id] as history_endpoint
+    [DELETE /api/chat/history/:id] as delete_endpoint
+    
+    note right of chat_endpoint
+      AI chat interface
+      Message processing
+      Context management
+    end note
+  }
+  
+  rectangle "System" as system_api {
+    [GET /health] as health_endpoint
+    note right of health_endpoint
+      System health check
+      Service status
+      Performance metrics
+    end note
+  }
+}
+
+rectangle "Backend Services" as services {
+  [File Service] as file_service
+  [Validation Service] as validation_service
+  [Chat Service] as chat_service
+  [Health Service] as health_service
+}
+
+' API to Service mapping
+validate_endpoint --> validation_service
+download_endpoint --> file_service
+preview_endpoint --> file_service
+list_endpoint --> file_service
+chat_endpoint --> chat_service
+history_endpoint --> chat_service
+delete_endpoint --> chat_service
+health_endpoint --> health_service
+
+' HTTP Methods Legend
+legend top right
+  |= Method |= Purpose |
+  | POST | Create/Submit |
+  | GET | Retrieve |
+  | DELETE | Remove |
+end legend
+
+@enduml
+
+@startuml 8090PCB_Key_Features
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB Key Features Breakdown
+
+package "Core Features" as core {
+  usecase "PCB Analysis" as pcb_analysis
+  usecase "Firmware Planning" as firmware_planning
+  usecase "Web Interface" as web_interface
+  usecase "AI Integration" as ai_integration
+}
+
+package "PCB Analysis Features" as pcb_features {
+  usecase "File Upload" as file_upload
+  usecase "Design Rule Check" as drc_check
+  usecase "Component Extraction" as component_extract
+  usecase "BOM Generation" as bom_gen
+}
+
+package "Firmware Planning Features" as firmware_features {
+  usecase "AI Analysis" as ai_analysis
+  usecase "RAG System" as rag_system
+  usecase "Structured Output" as structured_output
+  usecase "Risk Assessment" as risk_assess
+}
+
+package "Web Interface Features" as web_features {
+  usecase "Drag & Drop" as drag_drop
+  usecase "Real-time Feedback" as realtime
+  usecase "File Management" as file_mgmt
+  usecase "Results Display" as results_display
+}
+
+package "AI Integration Features" as ai_features {
+  usecase "Local LLM" as local_llm
+  usecase "Document Retrieval" as doc_retrieval
+  usecase "Context Awareness" as context_aware
+  usecase "Multi-modal Output" as multimodal
+}
+
+' Feature relationships
+pcb_analysis --> file_upload
+pcb_analysis --> drc_check
+pcb_analysis --> component_extract
+pcb_analysis --> bom_gen
+
+firmware_planning --> ai_analysis
+firmware_planning --> rag_system
+firmware_planning --> structured_output
+firmware_planning --> risk_assess
+
+web_interface --> drag_drop
+web_interface --> realtime
+web_interface --> file_mgmt
+web_interface --> results_display
+
+ai_integration --> local_llm
+ai_integration --> doc_retrieval
+ai_integration --> context_aware
+ai_integration --> multimodal
+
+' Sub-feature relationships
+file_upload --> drag_drop
+drc_check --> realtime
+component_extract --> ai_analysis
+bom_gen --> structured_output
+
+ai_analysis --> rag_system
+rag_system --> doc_retrieval
+structured_output --> multimodal
+risk_assess --> context_aware
+
+@enduml
+
+@startuml 8090PCB_Performance_Security
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+title 8090PCB Performance & Security Considerations
+
+rectangle "Performance Optimization" as performance {
+  
+  rectangle "Caching Strategy" as caching {
+    [Result Caching] as result_cache
+    [Validation Cache] as validation_cache
+    [Document Cache] as doc_cache
+  }
+  
+  rectangle "Async Processing" as async {
+    [File Upload Async] as upload_async
+    [AI Processing Async] as ai_async
+    [CLI Operations Async] as cli_async
+  }
+  
+  rectangle "Response Optimization" as response {
+    [Compression] as compression
+    [Streaming] as streaming
+    [Pagination] as pagination
+  }
+  
+  rectangle "Rate Limiting" as ratelimit {
+    [API Rate Limit] as api_limit
+    [Upload Limit] as upload_limit
+    [Chat Limit] as chat_limit
+  }
+}
+
+rectangle "Security Measures" as security {
+  
+  rectangle "Input Validation" as input_val {
+    [File Type Validation] as file_val
+    [Path Security] as path_sec
+    [Size Limits] as size_limits
+  }
+  
+  rectangle "Process Isolation" as isolation {
+    [Subprocess Isolation] as subproc_iso
+    [Sandbox Execution] as sandbox
+    [Resource Limits] as res_limits
+  }
+  
+  rectangle "Access Control" as access {
+    [File Access Control] as file_access
+    [API Authentication] as api_auth
+    [CORS Configuration] as cors_config
+  }
+  
+  rectangle "Data Protection" as data_prot {
+    [Secure File Handling] as secure_files
+    [Temporary File Cleanup] as temp_cleanup
+    [Error Information Filtering] as error_filter
+  }
+}
+
+rectangle "Monitoring & Logging" as monitoring {
+  
+  rectangle "Performance Metrics" as metrics {
+    [Response Time] as resp_time
+    [Throughput] as throughput
+    [Resource Usage] as resource_usage
+  }
+  
+  rectangle "Logging System" as logging {
+    [Request Logging] as req_logging
+    [Error Logging] as error_logging
+    [Audit Trail] as audit_trail
+  }
+  
+  rectangle "Health Checks" as health {
+    [Service Health] as service_health
+    [Dependency Health] as dep_health
+    [System Health] as sys_health
+  }
+  
+  rectangle "Alerting" as alerting {
+    [Error Alerts] as error_alerts
+    [Performance Alerts] as perf_alerts
+    [Security Alerts] as sec_alerts
+  }
+}
+
+' Cross-cutting relationships
+caching --> metrics
+async --> logging
+response --> health
+ratelimit --> alerting
+
+input_val --> logging
+isolation --> health
+access --> audit_trail
+data_prot --> security_alerts
+
+' Performance annotations
+note top of result_cache
+  Cache validation results
+  for 24 hours
+  Reduces AI processing
+end note
+
+note top of api_limit
+  100 requests/minute
+  per IP address
+  Sliding window
+end note
+
+' Security annotations
+note top of file_val
+  Only KiCad file types
+  .kicad_pro, .kicad_sch
+  .kicad_pcb, netlist
+end note
+
+note top of subproc_iso
+  Isolated subprocess
+  for CLI operations
+  Resource limits
+end note
+
+@enduml
+
+' Final legend and notes
+legend bottom center
+  |= Color |= Component Type |
+  |<back:E3F2FD> | Frontend Components |
+  |<back:F3E5F5> | Backend Services |
+  |<back:FFF3E0> | External Systems |
+  |<back:E8F5E8> | Storage/Cache |
+  |<back:E1F5FE> | User Actors |
+  
+  **8090PCB Project Overview**
+  Complete architectural documentation
+  for PCB design and firmware planning platform
+end legend
+
+note top
+  This comprehensive PlantUML file contains
+  all architectural views of the 8090PCB system:
+  
+  1. System Architecture Overview
+  2. User Flow Sequence Diagram
+  3. Data Processing Activity
+  4. Component Class Relationships
+  5. Deployment Architecture
+  6. Technology Stack
+  7. API Endpoints Overview
+  8. Key Features Breakdown
+  9. Performance & Security Considerations
+  
+  Render with any PlantUML tool to get
+  complete project documentation.
+end note

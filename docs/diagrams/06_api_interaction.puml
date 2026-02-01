@@ -1,0 +1,447 @@
+@startuml 8090PCB_API_Interaction_Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+' Define styles
+<style>
+participant {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
+}
+boundary {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+}
+control {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  FontColor #E65100
+}
+entity {
+  BackgroundColor #E8F5E8
+  BorderColor #388E3C
+  FontColor #1B5E20
+}
+</style>
+
+title 8090PCB API Interaction Diagram
+
+' Define participants
+participant "React Frontend" as frontend
+boundary "Express Router" as router
+control "API Controllers" as controllers
+entity "Service Layer" as services
+entity "Data Access Layer" as data_access
+database "File System" as filesystem
+database "Cache" as cache
+participant "MCP Server" as mcp_server
+participant "LLM Agent" as llm_agent
+participant "KiCad CLI" as kicad_cli
+
+' REST API Endpoints
+note over frontend, router
+  REST API Endpoints:
+  - POST /api/pcb/validate
+  - GET /api/files/:filename
+  - GET /api/files/preview/:filename
+  - GET /api/files
+  - POST /api/chat/message
+  - GET /api/chat/history/:id
+  - DELETE /api/chat/history/:id
+  - GET /health
+end note
+
+' Main PCB Validation Flow
+== PCB Validation API Flow ==
+
+frontend -> router: POST /api/pcb/validate
+activate router
+
+router -> controllers: pcbController.validate()
+activate controllers
+
+controllers -> services: pcbValidatorService.validateFiles()
+activate services
+
+services -> data_access: fileService.uploadFiles()
+activate data_access
+
+data_access -> filesystem: Create upload directory
+data_access -> filesystem: Store multipart files
+data_access --> services: Return file paths
+
+deactivate data_access
+
+services -> services: validateFileTypes()
+services -> services: generateValidationId()
+
+' File processing
+services -> data_access: parseKiCadFiles(filePaths)
+activate data_access
+
+data_access -> filesystem: Read .kicad_pro file
+data_access -> filesystem: Read .kicad_sch file
+data_access -> filesystem: Read .kicad_pcb file
+data_access --> services: Return parsed data
+
+deactivate data_access
+
+' MCP Integration
+services -> mcp_server: MCP Bridge callTool('analyze_pcb')
+activate mcp_server
+
+mcp_server -> mcp_server: Extract components
+mcp_server -> mcp_server: Analyze circuit
+mcp_server --> services: Return analysis results
+
+deactivate mcp_server
+
+' LLM Processing
+services -> llm_agent: LLM Agent processRequest()
+activate llm_agent
+
+llm_agent -> llm_agent: RAG with STM32 docs
+llm_agent -> llm_agent: Generate firmware plan
+llm_agent --> services: Return AI results
+
+deactivate llm_agent
+
+' KiCad Rendering
+services -> kicad_cli: kicad-cli export --format svg
+activate kicad_cli
+
+kicad_cli -> filesystem: Read PCB file
+kicad_cli -> filesystem: Write SVG render
+kicad_cli --> services: Return render path
+
+deactivate kicad_cli
+
+' Generate results
+services -> data_access: saveValidationResults()
+activate data_access
+
+data_access -> filesystem: Write firmware_plan.md
+data_access -> filesystem: Write prd_summary.md
+data_access -> filesystem: Write summary.json
+data_access -> filesystem: Write render.svg
+data_access --> services: Return file URLs
+
+deactivate data_access
+
+' Cache results
+services -> cache: cacheValidationResults(validationId, results)
+activate cache
+cache --> services: Cache confirmation
+deactivate cache
+
+services --> controllers: Return validation response
+deactivate services
+
+controllers --> router: Format JSON response
+deactivate controllers
+
+router --> frontend: 200 OK + validation data
+deactivate router
+
+' File Download API Flow
+== File Download API Flow ==
+
+frontend -> router: GET /api/files/:filename
+activate router
+
+router -> controllers: fileController.downloadFile()
+activate controllers
+
+controllers -> services: fileService.downloadFile(filename)
+activate services
+
+services -> data_access: fileAccess.validateFileAccess(filename)
+activate data_access
+
+data_access -> filesystem: Check file exists
+data_access -> filesystem: Validate path security
+data_access --> services: Return file stream
+
+deactivate data_access
+
+services --> controllers: Return file stream
+deactivate services
+
+controllers --> router: Stream file response
+deactivate controllers
+
+router --> frontend: File stream with headers
+deactivate router
+
+' File Preview API Flow
+== File Preview API Flow ==
+
+frontend -> router: GET /api/files/preview/:filename
+activate router
+
+router -> controllers: fileController.previewFile()
+activate controllers
+
+controllers -> services: fileService.previewFile(filename)
+activate services
+
+services -> data_access: fileAccess.readTextFile(filename)
+activate data_access
+
+data_access -> filesystem: Read file content
+data_access --> services: Return text content
+
+deactivate data_access
+
+services --> controllers: Return file content
+deactivate services
+
+controllers --> router: JSON response with content
+deactivate controllers
+
+router --> frontend: 200 OK + file content
+deactivate router
+
+' File List API Flow
+== File List API Flow ==
+
+frontend -> router: GET /api/files
+activate router
+
+router -> controllers: fileController.listFiles()
+activate controllers
+
+controllers -> services: fileService.listFiles()
+activate services
+
+services -> data_access: fileAccess.scanGeneratedDirectory()
+activate data_access
+
+data_access -> filesystem: List files
+data_access --> services: Return file list
+
+deactivate data_access
+
+services --> controllers: Return file metadata
+deactivate services
+
+controllers --> router: JSON response with file list
+deactivate controllers
+
+router --> frontend: 200 OK + file list
+deactivate router
+
+' Chat API Flow
+== Chat API Flow ==
+
+frontend -> router: POST /api/chat/message
+activate router
+
+router -> controllers: chatController.sendMessage()
+activate controllers
+
+controllers -> services: llmAgentService.processMessage()
+activate services
+
+services -> llm_agent: Spawn agent subprocess
+activate llm_agent
+
+llm_agent -> llm_agent: Process message with LlamaIndex
+llm_agent --> services: Return AI response
+
+deactivate llm_agent
+
+services --> controllers: Return chat response
+deactivate services
+
+controllers --> router: Format chat response
+deactivate controllers
+
+router --> frontend: 200 OK + AI response
+deactivate router
+
+' Chat History API Flow
+== Chat History API Flow ==
+
+frontend -> router: GET /api/chat/history/:conversationId
+activate router
+
+router -> controllers: chatController.getHistory()
+activate controllers
+
+controllers -> services: chatService.getConversationHistory()
+activate services
+
+services -> cache: cache.getConversation(conversationId)
+activate cache
+
+cache --> services: Return conversation history
+deactivate cache
+
+services --> controllers: Return history data
+deactivate services
+
+controllers --> router: JSON response with history
+deactivate controllers
+
+router --> frontend: 200 OK + conversation history
+deactivate router
+
+' Health Check API Flow
+== Health Check API Flow ==
+
+frontend -> router: GET /health
+activate router
+
+router -> controllers: healthController.check()
+activate controllers
+
+controllers -> services: healthService.checkAllServices()
+activate services
+
+services -> mcp_server: Health check
+activate mcp_server
+mcp_server --> services: MCP status
+deactivate mcp_server
+
+services -> llm_agent: Health check
+activate llm_agent
+llm_agent --> services: LLM status
+deactivate llm_agent
+
+services -> kicad_cli: Health check
+activate kicad_cli
+kicad_cli --> services: KiCad status
+deactivate kicad_cli
+
+services -> cache: Health check
+activate cache
+cache --> services: Cache status
+deactivate cache
+
+services --> controllers: Return health status
+deactivate services
+
+controllers --> router: Format health response
+deactivate controllers
+
+router --> frontend: 200 OK + health status
+deactivate router
+
+' Error Handling Flow
+== Error Handling Flow ==
+
+note over router, controllers
+  Error Handling Strategy:
+  - Input validation
+  - File type checking
+  - Path security validation
+  - Service timeout handling
+  - Graceful degradation
+end note
+
+alt File validation error
+services -> services: logValidationError()
+services --> controllers: 400 Bad Request
+controllers --> router: Error response
+router --> frontend: 400 + error message
+else Service unavailable
+services -> services: logServiceError()
+services --> controllers: 503 Service Unavailable
+controllers --> router: Error response
+router --> frontend: 503 + error message
+else Internal server error
+services -> services: logInternalError()
+services --> controllers: 500 Internal Server Error
+controllers --> router: Error response
+router --> frontend: 500 + error message
+end
+
+' API Rate Limiting Flow
+== Rate Limiting Flow ==
+
+note over router
+  Rate Limiting:
+  - 100 requests per minute per IP
+  - 10 file uploads per minute per IP
+  - 50 chat messages per minute per IP
+  - Sliding window implementation
+end note
+
+router -> router: checkRateLimit(request)
+alt Rate limit exceeded
+router --> frontend: 429 Too Many Requests
+else Within limits
+router -> controllers: Process request
+end
+
+' Authentication Flow (Future Enhancement)
+== Authentication Flow (Future) ==
+
+note over frontend, router
+  Planned Authentication:
+  - JWT token validation
+  - API key authentication
+  - Role-based access control
+  - Session management
+end note
+
+' API Versioning Flow
+== API Versioning Flow ==
+
+note over router
+  API Versioning Strategy:
+  - URL path versioning (/api/v1/)
+  - Header versioning (Accept: application/vnd.api+json;version=1)
+  - Backward compatibility
+  - Deprecation warnings
+end note
+
+' Request/Response Format Specifications
+note over frontend, router
+  Request Formats:
+  - multipart/form-data (file uploads)
+  - application/json (API calls)
+  - application/x-www-form-urlencoded (legacy)
+  
+  Response Formats:
+  - application/json (standard)
+  - text/plain (file previews)
+  - application/octet-stream (file downloads)
+  - image/svg+xml (PCB renders)
+end note
+
+' CORS Configuration
+note over router
+  CORS Configuration:
+  - Allowed origins: [frontend domain]
+  - Allowed methods: GET, POST, DELETE, OPTIONS
+  - Allowed headers: Content-Type, Authorization
+  - Max age: 86400 seconds
+  - Credentials: true
+end note
+
+' Logging and Monitoring
+note over controllers, services
+  API Logging:
+  - Request/response logging
+  - Performance metrics
+  - Error tracking
+  - Usage analytics
+  - Security audit trail
+end note
+
+' Legend
+legend top right
+  |= Component |= Type |
+  |<back:E3F2FD> | External System |
+  |<back:F3E5F5> | API Boundary |
+  |<back:FFF3E0> | Control Logic |
+  |<back:E8F5E8> | Data Entity |
+end legend
+
+@enduml

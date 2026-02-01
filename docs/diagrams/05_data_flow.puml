@@ -1,0 +1,278 @@
+@startuml 8090PCB_Data_Flow_Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+' Define styles
+<style>
+actor {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  FontColor #E65100
+}
+rectangle {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
+}
+database {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+}
+cloud {
+  BackgroundColor #E8F5E8
+  BorderColor #388E3C
+  FontColor #1B5E20
+}
+</style>
+
+title 8090PCB Data Flow Diagram
+
+' External entities
+actor "User" as user
+actor "KiCad Application" as kicad_app
+actor "STM32 Documentation Source" as stm32_source
+
+' Data stores
+database "Upload Directory" as upload_store
+database "Generated Files Store" as generated_store
+database "Validation Cache" as cache_store
+database "Configuration Store" as config_store
+database "Document Index" as doc_index
+database "Vector Database" as vector_db
+
+' Cloud services
+cloud "Ollama LLM Service" as ollama_cloud
+
+' Processes
+rectangle "React Frontend" as frontend_process
+rectangle "Express API Server" as api_process
+rectangle "File Upload Handler" as upload_process
+rectangle "File Validation Service" as validation_process
+rectangle "MCP Bridge Service" as mcp_process
+rectangle "PCB Analysis Engine" as analysis_process
+rectangle "LLM Agent Service" as llm_process
+rectangle "RAG System" as rag_process
+rectangle "Document Indexer" as indexer_process
+rectangle "KiCad CLI Interface" as kicad_process
+rectangle "Response Generator" as response_process
+rectangle "File Service" as file_process
+
+' Data flows from User
+user --> frontend_process : KiCad files (.kicad_pro, .kicad_sch, .kicad_pcb)
+user --> frontend_process : Upload requests
+user --> frontend_process : Download requests
+frontend_process --> user : Validation results
+frontend_process --> user : Generated files (firmware plan, PRD, render)
+frontend_process --> user : Error messages
+
+' Frontend to API flow
+frontend_process --> api_process : HTTP POST /api/pcb/validate
+frontend_process --> api_process : HTTP GET /api/files/:filename
+frontend_process --> api_process : HTTP POST /api/chat/message
+api_process --> frontend_process : JSON responses
+api_process --> frontend_process : File streams
+
+' Upload data flow
+api_process --> upload_process : Multipart form data
+upload_process --> upload_store : Store uploaded files
+upload_process --> validation_process : File paths for validation
+upload_process --> api_process : Upload confirmation
+
+' File validation flow
+validation_process --> upload_store : Read KiCad files
+validation_process --> validation_process : Parse file formats
+validation_process --> validation_process : Extract metadata
+validation_process --> analysis_process : Parsed file data
+validation_process --> api_process : Validation results
+
+' PCB analysis flow
+analysis_process --> mcp_process : Analysis requests
+mcp_process --> analysis_process : MCP tool results
+analysis_process --> analysis_process : Component extraction
+analysis_process --> analysis_process : Circuit analysis
+analysis_process --> llm_process : Analysis data for AI processing
+
+' MCP Bridge flow
+mcp_process --> upload_store : Read KiCad files
+mcp_process --> cache_store : Cache analysis results
+mcp_process --> kicad_process : CLI commands
+kicad_process --> mcp_process : CLI output (DRC, BOM, etc.)
+
+' KiCad CLI interface flow
+kicad_process --> upload_store : Read PCB files
+kicad_process --> upload_store : Write generated files
+kicad_process --> generated_store : Store renders and exports
+
+' LLM Agent flow
+llm_process --> rag_process : Query with context
+rag_process --> llm_process : Retrieved documents
+llm_process --> ollama_cloud : LLM inference requests
+ollama_cloud --> llm_process : Structured responses
+llm_process --> response_process : AI analysis results
+
+' RAG System flow
+rag_process --> doc_index : Query documents
+rag_process --> vector_db : Vector similarity search
+rag_process --> rag_process : Rerank results
+rag_process --> llm_process : Retrieved context
+
+' Document indexing flow
+indexer_process --> stm32_source : Fetch STM32 documentation
+indexer_process --> indexer_process : Parse documents
+indexer_process --> doc_index : Index documents
+indexer_process --> vector_db : Generate embeddings
+
+' Response generation flow
+response_process --> llm_process : AI analysis data
+response_process --> analysis_process : Validation data
+response_process --> response_process : Generate final response
+response_process --> generated_store : Store results
+response_process --> file_process : File metadata
+
+' File service flow
+file_process --> generated_store : Read generated files
+file_process --> generated_store : Write new files
+file_process --> api_process : File streams for download
+file_process --> cache_store : Cache frequently accessed files
+
+' Configuration flow
+api_process --> config_store : Read configuration
+llm_process --> config_store : Read LLM settings
+mcp_process --> config_store : Read MCP settings
+rag_process --> config_store : Read RAG settings
+
+' Cache management flow
+validation_process --> cache_store : Check cached results
+cache_store --> validation_process : Return cached data
+analysis_process --> cache_store : Store analysis results
+rag_process --> cache_store : Cache retrieved documents
+
+' Error handling flow
+validation_process --> api_process : Validation errors
+analysis_process --> api_process : Analysis errors
+llm_process --> api_process : LLM processing errors
+api_process --> frontend_process : Error responses
+
+' Data flow annotations
+note right of upload_store
+  Stores:
+  - Original KiCad files
+  - Temporary processing files
+  Organized by validation ID
+end note
+
+note right of generated_store
+  Stores:
+  - Firmware plans (Markdown)
+  - PRD summaries (Markdown)
+  - PCB renders (SVG)
+  - Validation summaries (JSON)
+end note
+
+note right of vector_db
+  Stores:
+  - Document embeddings
+  - STM32 technical data
+  - Component specifications
+  - Application notes
+end note
+
+note right of ollama_cloud
+  Provides:
+  - Text generation (gpt-oss:20b)
+  - Embeddings (qwen3-embedding:0.6b)
+  - Reranking (qwen3-reranker:0.6b)
+end note
+
+' Data transformation annotations
+note top of validation_process
+  Input: Raw KiCad files
+  Transform: File parsing and validation
+  Output: Structured data and metadata
+end note
+
+note top of analysis_process
+  Input: Validated file data
+  Transform: Component extraction and analysis
+  Output: Analysis results and component data
+end note
+
+note top of rag_process
+  Input: Query and context
+  Transform: Document retrieval and ranking
+  Output: Relevant technical documentation
+end note
+
+note top of llm_process
+  Input: Analysis data and context
+  Transform: AI-powered firmware planning
+  Output: Structured firmware plan and PRD
+end note
+
+' Data quality and validation flows
+note right of validation_process
+  Data Quality Checks:
+  - File format validation
+  - Schema validation
+  - Completeness checks
+  - Consistency verification
+end note
+
+' Performance optimization flows
+note right of cache_store
+  Performance Optimizations:
+  - Analysis result caching
+  - Document pre-indexing
+  - Vector similarity optimization
+  - Response compression
+end note
+
+' Security and privacy considerations
+note over upload_store, generated_store
+  Security Measures:
+  - File type validation
+  - Path traversal prevention
+  - Access control
+  - Automatic cleanup
+end note
+
+' Data retention policies
+note bottom of generated_store, cache_store
+  Data Retention:
+  - Generated files: 30 days
+  - Cache entries: 24 hours
+  - Upload files: 7 days
+  - Error logs: 90 days
+end note
+
+' Integration points with external systems
+note right of kicad_app
+  Integration with KiCad:
+  - Direct file import
+  - Design synchronization
+  - Version control
+  - Project management
+end note
+
+note right of stm32_source
+  Documentation sources:
+  - Reference manuals
+  - Application notes
+  - Datasheets
+  - Example code
+  - Design guidelines
+end note
+
+' Legend
+legend top right
+  |= Symbol |= Meaning |
+  |<back:FFF3E0> | External Entity |
+  |<back:E3F2FD> | Process/Service |
+  |<back:F3E5F5> | Data Store |
+  |<back:E8F5E8> | Cloud Service |
+end legend
+
+@enduml

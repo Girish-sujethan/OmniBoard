@@ -87,6 +87,148 @@ class ApiService {
 
     return response.data;
   }
+
+  // ==================== MCP Project APIs ====================
+
+  /**
+   * List all KiCad projects via MCP
+   */
+  async listProjects() {
+    const response = await this.client.get('/projects/list');
+    return response.data;
+  }
+
+  /**
+   * Get detailed project information via MCP
+   */
+  async getProjectDetails(projectPath) {
+    const response = await this.client.get(`/projects/${encodeURIComponent(projectPath)}`);
+    return response.data;
+  }
+
+  /**
+   * Open a KiCad project in KiCad application
+   */
+  async openProject(projectPath) {
+    const response = await this.client.post('/projects/open', { projectPath });
+    return response.data;
+  }
+
+  // ==================== MCP Analysis APIs ====================
+
+  /**
+   * Analyze uploaded PCB using MCP tools
+   */
+  async analyzePcb(files, comprehensive = false) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await this.client.post('/pcb/analyze', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      params: { comprehensive },
+    });
+
+    return response.data;
+  }
+
+  /**
+   * Run Design Rule Check using MCP
+   */
+  async runDrc(files) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await this.client.post('/pcb/drc', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data;
+  }
+
+  // ==================== MCP Report APIs ====================
+
+  /**
+   * Generate BOM report via MCP
+   */
+  async generateBom(files, format = 'csv', analyze = false) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await this.client.post('/reports/bom', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      params: { format, analyze },
+    });
+
+    return response.data;
+  }
+
+  /**
+   * Generate DRC report with history via MCP
+   */
+  async generateDrcReport(files, includeHistory = false) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await this.client.post('/reports/drc', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      params: { history: includeHistory },
+    });
+
+    return response.data;
+  }
+
+  /**
+   * Get DRC history for a project
+   */
+  async getDrcHistory(projectPath) {
+    const response = await this.client.get('/reports/drc/history', {
+      params: { projectPath },
+    });
+    return response.data;
+  }
+
+  /**
+   * Extract netlist via MCP
+   */
+  async extractNetlist(files, format = 'kicad', analyze = false) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await this.client.post('/reports/netlist', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      params: { format, analyze },
+    });
+
+    return response.data;
+  }
+
+  /**
+   * Get available MCP tools
+   */
+  async listMcpTools() {
+    const response = await this.client.get('/chat/tools');
+    return response.data.tools || [];
+  }
 }
 
 export default new ApiService();

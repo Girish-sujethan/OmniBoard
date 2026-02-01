@@ -1,0 +1,340 @@
+@startuml 8090PCB_Sequence_Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+
+' Define styles
+<style>
+participant {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #0D47A1
+}
+database {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+}
+box {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  FontColor #E65100
+}
+</style>
+
+title 8090PCB PCB Validation Pipeline Sequence Diagram
+
+' Define participants
+participant "User" as user
+participant "React Frontend" as frontend
+participant "Express Server" as server
+participant "File Service" as file_service
+participant "PCB Validator" as validator
+participant "LLM Agent Service" as llm_service
+participant "LlamaIndex Agent" as ai_agent
+participant "MCP Bridge" as mcp_bridge
+participant "FastMCP Server" as mcp_server
+participant "KiCad CLI" as kicad_cli
+participant "Ollama LLM" as ollama
+database "File System" as filesystem
+database "STM32 Docs" as stm32_docs
+
+' Main sequence flow
+autonumber 1
+
+== File Upload Phase ==
+
+user -> frontend: Drag & Drop KiCad files
+frontend -> frontend: Validate file types (.kicad_pro, .kicad_sch, .kicad_pcb)
+frontend -> frontend: Create validation ID
+frontend -> server: POST /api/pcb/validate (multipart/form-data)
+
+activate server
+
+server -> file_service: handleFileUpload()
+activate file_service
+
+file_service -> filesystem: Create upload directory (validationId/)
+file_service -> filesystem: Store uploaded files
+file_service --> file_service: Validate file integrity
+file_service --> server: Return file paths and validation ID
+
+deactivate file_service
+
+server -> validator: validateFiles(validationId, filePaths)
+activate validator
+
+== File Parsing Phase ==
+
+validator -> validator: Parse KiCad project file (.kicad_pro)
+validator -> validator: Extract schematic data (.kicad_sch)
+validator -> validator: Parse PCB layout (.kicad_pcb)
+validator -> validator: Extract component list
+validator -> validator: Identify microcontrollers and key components
+
+== MCP Analysis Phase ==
+
+validator -> mcp_bridge: connectToServer()
+activate mcp_bridge
+
+mcp_bridge -> mcp_server: MCP handshake
+activate mcp_server
+
+mcp_bridge --> validator: Return MCP client
+
+deactivate mcp_server
+
+validator -> mcp_bridge: callTool('analyze_pcb', {components, schematic})
+activate mcp_bridge
+
+mcp_bridge -> mcp_server: Execute analysis tool
+activate mcp_server
+
+mcp_server -> mcp_server: Extract component information
+mcp_server -> mcp_server: Analyze circuit topology
+mcp_server -> mcp_server: Identify design patterns
+mcp_server --> mcp_bridge: Return analysis results
+
+deactivate mcp_server
+
+mcp_bridge --> validator: Return component analysis
+
+deactivate mcp_bridge
+
+== Design Rule Check Phase ==
+
+validator -> mcp_bridge: callTool('run_drc', {pcb_file})
+activate mcp_bridge
+
+mcp_bridge -> mcp_server: Execute DRC tool
+activate mcp_server
+
+mcp_server -> kicad_cli: kicad-cli drc [pcb_file]
+activate kicad_cli
+
+kicad_cli --> mcp_server: DRC report (violations, warnings)
+
+deactivate kicad_cli
+
+mcp_server --> mcp_bridge: Return DRC results
+
+deactivate mcp_server
+
+mcp_bridge --> validator: Return DRC report
+
+deactivate mcp_bridge
+
+== BOM Generation Phase ==
+
+validator -> mcp_bridge: callTool('generate_bom', {components})
+activate mcp_bridge
+
+mcp_bridge -> mcp_server: Execute BOM tool
+activate mcp_server
+
+mcp_server -> mcp_server: Process component list
+mcp_server -> mcp_server: Generate Bill of Materials
+mcp_server --> mcp_bridge: Return BOM data
+
+deactivate mcp_server
+
+mcp_bridge --> validator: Return BOM
+
+deactivate mcp_bridge
+
+== AI Analysis Phase ==
+
+validator -> llm_service: spawnAgent('firmware_mode')
+activate llm_service
+
+llm_service -> ai_agent: Start Python subprocess
+activate ai_agent
+
+ai_agent -> ai_agent: Initialize LlamaIndex
+ai_agent -> ai_agent: Load STM32 documentation index
+ai_agent --> llm_service: Agent ready
+
+deactivate ai_agent
+
+llm_service --> validator: Return agent handle
+
+deactivate llm_service
+
+validator -> llm_service: processRequest({
+  component_analysis,
+  schematic_data,
+  bom_data,
+  drc_report
+})
+activate llm_service
+
+llm_service -> ai_agent: Send analysis request
+activate ai_agent
+
+ai_agent -> stm32_docs: Query relevant documentation
+activate stm32_docs
+
+stm32_docs --> ai_agent: Return technical documents
+
+deactivate stm32_docs
+
+ai_agent -> ollama: Generate embeddings for query
+activate ollama
+
+ollama --> ai_agent: Return vector embeddings
+
+deactivate ollama
+
+ai_agent -> ai_agent: Perform RAG retrieval
+ai_agent -> ollama: Rerank retrieved documents
+activate ollama
+
+ollama --> ai_agent: Return ranked results
+
+deactivate ollama
+
+ai_agent -> ollama: Generate firmware plan (gpt-oss:20b)
+activate ollama
+
+ollama --> ai_agent: Return structured response
+
+deactivate ollama
+
+ai_agent -> ai_agent: Parse JSON response
+ai_agent -> ai_agent: Extract firmware phases
+ai_agent -> ai_agent: Generate task breakdown
+ai_agent -> ai_agent: Identify implementation risks
+ai_agent --> llm_service: Return AI analysis results
+
+deactivate ai_agent
+
+llm_service --> validator: Return firmware plan and PRD
+
+deactivate llm_service
+
+== PCB Rendering Phase ==
+
+validator -> validator: Check if .kicad_pcb file exists
+alt PCB file available
+  validator -> kicad_cli: kicad-cli export --format svg [pcb_file]
+  activate kicad_cli
+  
+  kicad_cli -> kicad_cli: Generate SVG render
+  kicad_cli --> validator: Return SVG file path
+  
+  deactivate kicad_cli
+else No PCB file
+  validator -> validator: Skip rendering step
+end
+
+== Results Generation Phase ==
+
+validator -> filesystem: Create generated files directory
+validator -> filesystem: Save firmware plan (Markdown)
+validator -> filesystem: Save PRD summary (Markdown)
+validator -> filesystem: Save validation summary (JSON)
+alt PCB render available
+  validator -> filesystem: Save PCB render (SVG)
+end
+
+validator -> validator: Create file metadata
+validator -> validator: Generate download URLs
+validator --> server: Return validation results
+
+deactivate validator
+
+== Response Phase ==
+
+server -> server: Format response JSON
+server -> server: Include validation ID and file URLs
+server --> frontend: POST response (200 OK)
+
+deactivate server
+
+== Frontend Display Phase ==
+
+frontend -> frontend: Parse response data
+frontend -> frontend: Update UI with results
+frontend -> frontend: Display firmware plan
+frontend -> frontend: Show PRD summary
+alt PCB render available
+  frontend -> frontend: Display PCB visualization
+end
+frontend -> frontend: Generate download links
+frontend -> user: Show validation results
+
+== File Download Phase (Optional) ==
+
+user -> frontend: Click download link
+frontend -> server: GET /api/files/:filename
+activate server
+
+server -> file_service: downloadFile(filename)
+activate file_service
+
+file_service -> filesystem: Read file from generated directory
+file_service --> file_service: Validate file access
+file_service --> server: Return file stream
+
+deactivate file_service
+
+server --> frontend: File stream response
+frontend --> user: File download
+
+deactivate server
+
+== Error Handling Flow ==
+
+note over server, validator
+  Error handling occurs at each phase:
+  - File upload errors
+  - Parsing failures
+  - MCP connection issues
+  - AI agent timeouts
+  - KiCad CLI failures
+end note
+
+alt Validation fails at any point
+  validator -> validator: Log error details
+  validator -> validator: Generate error report
+  validator -> filesystem: Save error log
+  validator --> server: Return error response
+  server --> frontend: Error response (400/500)
+  frontend -> user: Display error message with suggestions
+end
+
+== Cleanup Phase ==
+
+note over validator, filesystem
+  Optional cleanup after validation:
+  - Archive old validation results
+  - Clean temporary files
+  - Update usage statistics
+end note
+
+' Performance considerations
+note right of ollama
+  LLM processing time varies:
+  - Simple analysis: 10-30 seconds
+  - Complex firmware planning: 1-3 minutes
+  - Depends on model size and hardware
+end note
+
+note right of kicad_cli
+  KiCad CLI operations:
+  - DRC check: 5-15 seconds
+  - SVG export: 2-10 seconds
+  - Depends on PCB complexity
+end note
+
+' Security considerations
+note over file_service, filesystem
+  Security measures:
+  - File type validation
+  - Path traversal protection
+  - File size limits (50MB per file)
+  - Upload directory isolation
+end note
+
+@enduml

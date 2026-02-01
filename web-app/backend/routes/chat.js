@@ -1,5 +1,6 @@
 import express from 'express';
 import { runAgent } from '../services/llmAgent.js';
+import mcpToolExecutor from '../services/mcpToolExecutor.js';
 
 const router = express.Router();
 
@@ -110,15 +111,33 @@ router.delete('/history/:conversationId', (req, res) => {
 
 /**
  * GET /api/chat/tools
- * List available tools (legacy)
+ * List available tools (MCP tools + agent capabilities)
  */
 router.get('/tools', async (req, res) => {
   try {
-    res.json({ tools: [] });
+    const mcpTools = mcpToolExecutor.getToolDefinitions();
+    res.json({ tools: mcpTools });
   } catch (error) {
     console.error('Error fetching tools:', error);
     res.status(500).json({
       error: 'Failed to fetch tools',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/chat/tools/prompt
+ * Get formatted tool descriptions for LLM agent
+ */
+router.get('/tools/prompt', async (req, res) => {
+  try {
+    const toolPrompt = mcpToolExecutor.getToolPrompt();
+    res.json({ prompt: toolPrompt });
+  } catch (error) {
+    console.error('Error generating tool prompt:', error);
+    res.status(500).json({
+      error: 'Failed to generate tool prompt',
       message: error.message,
     });
   }
