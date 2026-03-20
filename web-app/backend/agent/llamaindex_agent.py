@@ -7,13 +7,10 @@ from typing import Any, Dict, List, Optional
 try:
     from llama_index.core import StorageContext, VectorStoreIndex, load_index_from_storage, get_response_synthesizer
     from llama_index.core.llms import ChatMessage
-    from llama_index.core.postprocessor import LLMRerank
     from llama_index.core.query_engine import RetrieverQueryEngine
     from llama_index.core.schema import Document
     from llama_index.core import SimpleDirectoryReader
     from llama_index.readers.file import PDFReader
-    from llama_index.llms.ollama import Ollama
-    from llama_index.embeddings.ollama import OllamaEmbedding
 except ImportError as exc:
     sys.stderr.write(
         "Missing LlamaIndex dependencies. Install with: "
@@ -74,16 +71,52 @@ def get_env(name: str, default: Optional[str] = None) -> Optional[str]:
     return value
 
 
-def build_ollama_llm(model: str) -> Ollama:
+# ---------------------------------------------------------------------------
+# LLM provider factory — supports "groq" (cloud, default) and "ollama" (local)
+# ---------------------------------------------------------------------------
+
+def _get_provider() -> str:
+    return get_env("LLM_PROVIDER", "groq").lower()
+
+
+def build_llm(model: Optional[str] = None):
+    provider = _get_provider()
+
+    if provider == "groq":
+        from llama_index.llms.groq import Groq
+
+        api_key = get_env("GROQ_API_KEY", "")
+        model = model or get_env("GROQ_MODEL", "llama-3.3-70b-versatile")
+        return Groq(model=model, api_key=api_key, temperature=0.2, request_timeout=120.0)
+
+    # fallback: ollama
+    from llama_index.llms.ollama import Ollama
+
     base_url = get_env("OLLAMA_BASE_URL", "http://localhost:11434")
+    model = model or get_env("OLLAMA_LLM_MODEL", "gpt-oss:20b")
     return Ollama(model=model, base_url=base_url, temperature=0.2, request_timeout=360.0)
 
 
-def build_embed_model() -> OllamaEmbedding:
+def build_embed_model():
+    provider = _get_provider()
+
+    if provider == "groq":
+        # Groq has no embeddings API — use fastembed (lightweight, CPU-only)
+        from llama_index.embeddings.fastembed import FastEmbedEmbedding
+
+        embed_model_name = get_env("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
+        return FastEmbedEmbedding(model_name=embed_model_name)
+
+    from llama_index.embeddings.ollama import OllamaEmbedding
+
     base_url = get_env("OLLAMA_BASE_URL", "http://localhost:11434")
     embed_model = get_env("OLLAMA_EMBED_MODEL", "qwen3-embedding:0.6b")
     return OllamaEmbedding(model_name=embed_model, base_url=base_url, request_timeout=360.0)
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def limit_history(history: List[Dict[str, Any]], max_items: int = 8) -> List[Dict[str, Any]]:
     if not history:
@@ -91,7 +124,7 @@ def limit_history(history: List[Dict[str, Any]], max_items: int = 8) -> List[Dic
     return history[-max_items:]
 
 
-def run_chat(llm: Ollama, payload: Dict[str, Any]) -> Dict[str, Any]:
+def run_chat(llm, payload: Dict[str, Any]) -> Dict[str, Any]:
     messages: List[ChatMessage] = [ChatMessage(role="system", content=SYSTEM_CHAT_PROMPT)]
     history = limit_history(payload.get("history", []))
     for item in history:
@@ -185,7 +218,7 @@ def recursive_chunk(text: str, max_chars: int, overlap: int) -> List[str]:
     return with_overlap
 
 
-def build_stm32_index(embed_model: OllamaEmbedding) -> VectorStoreIndex:
+def build_stm32_index(embed_model) -> VectorStoreIndex:
     docs_dir = resolve_docs_dir()
     index_dir = resolve_index_dir()
     index_dir.mkdir(parents=True, exist_ok=True)
@@ -217,38 +250,32 @@ def build_stm32_index(embed_model: OllamaEmbedding) -> VectorStoreIndex:
 
     index = VectorStoreIndex.from_documents(chunked_docs, embed_model=embed_model)
     index.storage_context.persist(persist_dir=str(index_dir))
-    print(f"DEBUG: Index persisted to {index_dir}")
-    print(f"DEBUG: Docstore exists? {(index_dir / 'docstore.json').exists()}")
     return index
 
 
-def build_rag_context(embed_model: OllamaEmbedding, rerank_llm: Ollama, llm: Ollama, query: str) -> str:
+def build_rag_context(embed_model, llm, query: str) -> str:
     index = build_stm32_index(embed_model)
-    retriever = index.as_retriever(similarity_top_k=8)
-    reranker = LLMRerank(top_n=4, llm=rerank_llm)
-    
+    retriever = index.as_retriever(similarity_top_k=6)
+
     synthesizer = get_response_synthesizer(response_mode="compact", llm=llm)
     engine = RetrieverQueryEngine(
         retriever=retriever,
-        node_postprocessors=[reranker],
         response_synthesizer=synthesizer,
     )
     response = engine.query(query)
     return str(response)
 
 
-def run_firmware(llm: Ollama, payload: Dict[str, Any]) -> Dict[str, Any]:
+def run_firmware(llm, payload: Dict[str, Any]) -> Dict[str, Any]:
     context = payload.get("context", {})
     compact = json.dumps(context, ensure_ascii=True)
     embed_model = build_embed_model()
-    rerank_model = get_env("OLLAMA_RERANK_MODEL", "sam860/qwen3-reranker:0.6b-F16")
-    rerank_llm = build_ollama_llm(rerank_model)
 
     rag_query = (
         "STM32 firmware bring-up checklist covering clocks, power rails, boot pins, "
         "debug interfaces, peripheral initialization, and safety checks."
     )
-    rag_context = build_rag_context(embed_model, rerank_llm, llm, rag_query)
+    rag_context = build_rag_context(embed_model, llm, rag_query)
     messages = [
         ChatMessage(role="system", content=SYSTEM_FIRMWARE_PROMPT),
         ChatMessage(
@@ -266,7 +293,6 @@ def run_firmware(llm: Ollama, payload: Dict[str, Any]) -> Dict[str, Any]:
     content = response.message.content if response and response.message else ""
     parsed = extract_json(content)
     if not parsed:
-        print(f"DEBUG: Failed to parse JSON. Raw content:\n{content}")
         raise RuntimeError("Agent returned invalid JSON")
     return parsed
 
@@ -274,8 +300,7 @@ def run_firmware(llm: Ollama, payload: Dict[str, Any]) -> Dict[str, Any]:
 def main() -> None:
     payload = load_input()
     mode = str(payload.get("mode", "chat")).lower()
-    llm_model = get_env("OLLAMA_LLM_MODEL", "gpt-oss:20b")
-    llm = build_ollama_llm(llm_model)
+    llm = build_llm()
 
     if mode == "firmware":
         result = run_firmware(llm, payload)

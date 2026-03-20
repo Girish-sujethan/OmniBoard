@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -16,12 +18,47 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// Trust reverse proxy (nginx) for correct client IP in rate limiting
+app.set('trust proxy', 1);
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : undefined;
+app.use(cors(allowedOrigins ? { origin: allowedOrigins } : {}));
+
+// Rate limiting — general API (generous for low-traffic portfolio)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+// LLM endpoints — still capped to prevent abuse / runaway Groq usage
+const llmLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit reached for AI processing. Please wait before retrying.' },
+});
+
+// Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apply general rate limit to all /api routes
+app.use('/api', apiLimiter);
 
 // Ensure required directories exist
 const dirs = ['uploads', 'generated'];
@@ -32,12 +69,12 @@ dirs.forEach(dir => {
   }
 });
 
-// Routes
+// Routes — apply stricter rate limit to LLM-heavy endpoints
 app.use('/api/chat', chatRoutes);
 app.use('/api/files', fileRoutes);
-app.use('/api/pcb', pcbRoutes);
+app.use('/api/pcb', llmLimiter, pcbRoutes);
 app.use('/api/projects', projectsRoutes);
-app.use('/api/reports', reportsRoutes);
+app.use('/api/reports', llmLimiter, reportsRoutes);
 
 // Health check
 app.get('/health', async (req, res) => {
@@ -62,7 +99,7 @@ app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(500).json({
     error: 'Internal server error',
-    message: err.message
+    ...(process.env.NODE_ENV !== 'production' && { message: err.message }),
   });
 });
 

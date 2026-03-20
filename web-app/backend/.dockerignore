@@ -1,0 +1,6 @@
+node_modules
+uploads/*
+generated/*
+.agent-venv
+agent/index_stm32
+.env.local
